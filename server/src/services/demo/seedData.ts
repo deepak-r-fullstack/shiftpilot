@@ -1,18 +1,9 @@
 import { haversineKm } from "../../utils/geo";
-import { addDays, atDenver, denverDate, weekdayOfDate, weekKey } from "../../utils/time";
+import { addDays, atDenver, weekdayOfDate } from "../../utils/time";
 import { findCandidates } from "../scheduling/candidateFinder";
-import {
-  AuthorizationRecord,
-  CaregiverRecord,
-  ClientRecord,
-  ServiceRecord,
-  toAuthorizationFacts,
-  toCaregiverFacts,
-  toServiceFacts,
-  toVisitFacts,
-  VisitRecord,
-} from "../scheduling/mappers";
-import { allPassed, checkVisit, RuleContext } from "../scheduling/ruleChecker";
+import { MemoryAgency } from "../scheduling/memoryAgency";
+import { AuthorizationRecord, CaregiverRecord, ClientRecord, ServiceRecord, toCaregiverFacts, VisitRecord } from "../scheduling/mappers";
+import { allPassed, checkVisit } from "../scheduling/ruleChecker";
 import { LatLng, VisitFacts, Weekday, WEEKDAYS } from "../scheduling/types";
 
 // ---------------------------------------------------------------------------
@@ -97,67 +88,6 @@ const WEEKDAY_SHAPES: { days: Weekday[]; start: string; end: string }[] = [
   { days: ["sun", "mon", "tue", "wed", "thu"], start: "10:00", end: "18:00" },
 ];
 
-/** In-memory agency with fast lookups, so placing ~2,500 visits with full rule checks stays quick. */
-class AgencyBook {
-  private byCaregiverWeek = new Map<string, VisitFacts[]>();
-  private byClientDay = new Map<string, VisitFacts[]>();
-  private byAuthorization = new Map<string, VisitFacts[]>();
-  private visitCountByPair = new Map<string, number>();
-
-  constructor(
-    private readonly data: AgencyData,
-    private readonly clientLocation: Map<string, LatLng>
-  ) {}
-
-  add(record: VisitRecord) {
-    this.data.visits.push(record);
-    const visit = toVisitFacts(record);
-    if (visit.caregiverId) push(this.byCaregiverWeek, `${visit.caregiverId}|${weekKey(visit.start)}`, visit);
-    push(this.byClientDay, `${visit.clientId}|${denverDate(visit.start)}`, visit);
-    push(this.byAuthorization, visit.authorizationId, visit);
-    if (visit.caregiverId) {
-      const key = `${visit.caregiverId}|${visit.clientId}`;
-      this.visitCountByPair.set(key, (this.visitCountByPair.get(key) ?? 0) + 1);
-    }
-  }
-
-  visitsWith(caregiverCode: string, clientCode: string) {
-    return this.visitCountByPair.get(`${caregiverCode}|${clientCode}`) ?? 0;
-  }
-
-  context(visit: VisitFacts, caregiverCode: string | null): RuleContext {
-    const auth = this.data.authorizations.find((a) => a.code === visit.authorizationId)!;
-    const service = SERVICES.find((s) => s.code === visit.serviceCode)!;
-    const caregiver = caregiverCode ? this.data.caregivers.find((c) => c.code === caregiverCode)! : null;
-    const seen = new Set<string>();
-    const others: VisitFacts[] = [];
-    const addAll = (list?: VisitFacts[]) =>
-      list?.forEach((v) => {
-        if (v.id !== visit.id && !seen.has(v.id)) {
-          seen.add(v.id);
-          others.push(v);
-        }
-      });
-    if (caregiverCode) addAll(this.byCaregiverWeek.get(`${caregiverCode}|${weekKey(visit.start)}`));
-    addAll(this.byClientDay.get(`${visit.clientId}|${denverDate(visit.start)}`));
-    addAll(this.byAuthorization.get(visit.authorizationId));
-    return {
-      visit: { ...visit, caregiverId: caregiverCode },
-      service: toServiceFacts(service),
-      authorization: toAuthorizationFacts(auth),
-      caregiver: caregiver ? toCaregiverFacts(caregiver) : null,
-      clientLocation: this.clientLocation.get(visit.clientId)!,
-      otherVisits: others.map((v) => ({ ...v, clientLocation: this.clientLocation.get(v.clientId)! })),
-    };
-  }
-}
-
-function push<T>(map: Map<string, T[]>, key: string, value: T) {
-  const list = map.get(key);
-  if (list) list.push(value);
-  else map.set(key, [value]);
-}
-
 export function generateAgency(seed: number, today: string): AgencyData {
   const random = rng(seed);
   const pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)];
@@ -211,8 +141,7 @@ export function generateAgency(seed: number, today: string): AgencyData {
   CLIENT_NAMES.forEach((name, index) => {
     data.clients.push({ code: `CL-${pad(index + 1)}`, name, town: pick(TOWNS), location: near(25), preferredCaregiverCodes: [] });
   });
-  const clientLocation = new Map(data.clients.map((c) => [c.code, c.location]));
-  const book = new AgencyBook(data, clientLocation);
+  const book = new MemoryAgency(data);
   let visitNumber = 1000;
   const nextCode = () => `V-${(visitNumber += 1)}`;
 

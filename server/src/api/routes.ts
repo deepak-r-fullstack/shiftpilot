@@ -8,6 +8,7 @@ import { authenticateSession } from "../middlewares/sandbox.middleware";
 import * as sessionController from "../controllers/session.controller";
 import * as scheduleController from "../controllers/schedule.controller";
 import * as proposalsController from "../controllers/proposals.controller";
+import * as requestsController from "../controllers/requests.controller";
 
 // Every endpoint and who may call it, in one place.
 const router = Router();
@@ -36,6 +37,17 @@ router.get(
   authenticateSession,
   validateRequest(scheduleController.authorizationsQuerySchema, "query"),
   asyncHandler(scheduleController.getAuthorizations)
+);
+
+// ---- the agent (streams its steps as Server-Sent Events) ----
+const agentLimiter = rateLimit({ windowMs: 60 * 1000, limit: isTest ? 10000 : 12, standardHeaders: true, legacyHeaders: false });
+router.get("/requests/options", apiLimiter, authenticateSession, asyncHandler(requestsController.getRequestOptions));
+router.post(
+  "/requests",
+  agentLimiter,
+  authenticateSession,
+  validateRequest(requestsController.agentRequestSchema),
+  asyncHandler(requestsController.createAgentRequest)
 );
 
 // ---- proposals (review before anything changes) ----

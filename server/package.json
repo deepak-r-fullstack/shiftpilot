@@ -15,11 +15,11 @@
     "test": "jest --runInBand"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.105",
-    "@ai-sdk/openai": "^4.0.118",
+    "@ai-sdk/anthropic": "^3.0.142",
+    "@ai-sdk/openai": "^3.0.143",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@sritarak/agentreplay": "^0.2.0",
-    "ai": "^7.0.173",
+    "ai": "^6.0.332",
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",
     "express": "^4.22.3",

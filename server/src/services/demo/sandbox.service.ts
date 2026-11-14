@@ -11,7 +11,7 @@ import { Visit } from "../../models/visit.model";
 import { ChangeRequest } from "../../models/changeRequest.model";
 import { Proposal } from "../../models/proposal.model";
 import { AppliedPlan } from "../../models/appliedPlan.model";
-import { todayInDenver } from "../../utils/time";
+import { agencyToday } from "../../utils/clock";
 import { logger } from "../../utils/logger";
 import { DEFAULT_SEED, generateAgency } from "./seedData";
 
@@ -26,7 +26,7 @@ const SCHEDULING_MODELS: Model<any>[] = [Service, Caregiver, Client, Authorizati
 let seeding: Promise<void> | null = null;
 
 /** Builds the template agency for a given day (default: today in Denver), replacing the old one. */
-export async function seedTemplate(today = todayInDenver()): Promise<void> {
+export async function seedTemplate(today = agencyToday()): Promise<void> {
   const data = generateAgency(DEFAULT_SEED, today);
   await Promise.all(SCHEDULING_MODELS.map((model) => model.deleteMany({ sandboxId: TEMPLATE_SANDBOX })));
   const withSandbox = <T extends object>(list: T[]) => list.map((item) => ({ ...item, sandboxId: TEMPLATE_SANDBOX }));
@@ -45,7 +45,7 @@ export async function seedTemplate(today = todayInDenver()): Promise<void> {
 }
 
 /** Visits are placed relative to today, so yesterday's template is rebuilt before it is copied. */
-export async function ensureFreshTemplate(today = todayInDenver()): Promise<{ nextVisitNumber: number }> {
+export async function ensureFreshTemplate(today = agencyToday()): Promise<{ nextVisitNumber: number }> {
   let state = await TemplateState.findOne({ key: "template" }).lean();
   if (!state || state.seededFor !== today) {
     // One rebuild at a time, even when several visitors arrive together.
@@ -69,7 +69,7 @@ async function copyTemplateInto(sandboxId: string) {
   }
 }
 
-export async function createSandbox(today = todayInDenver()): Promise<SandboxDoc> {
+export async function createSandbox(today = agencyToday()): Promise<SandboxDoc> {
   const { nextVisitNumber } = await ensureFreshTemplate(today);
   const label = `Visitor ${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
   const sandbox = await Sandbox.create({
@@ -82,7 +82,7 @@ export async function createSandbox(today = todayInDenver()): Promise<SandboxDoc
 }
 
 /** Puts a visitor's sandbox back to a fresh copy of today's template. */
-export async function resetSandbox(sandboxId: string, today = todayInDenver()): Promise<void> {
+export async function resetSandbox(sandboxId: string, today = agencyToday()): Promise<void> {
   const { nextVisitNumber } = await ensureFreshTemplate(today);
   await Promise.all([
     ...SCHEDULING_MODELS.map((model) => model.deleteMany({ sandboxId })),

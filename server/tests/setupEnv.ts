@@ -4,3 +4,4 @@ process.env.JWT_SECRET = "test-secret-at-least-16-chars";
 process.env.LLM_PROVIDER = "none";
 process.env.DEMO_MODE = "true";
 process.env.SHIFTPILOT_INTERNAL_SECRET = "test-internal-secret";
+process.env.SHIFTPILOT_TODAY = "2026-11-14";
