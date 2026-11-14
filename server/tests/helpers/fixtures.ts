@@ -16,3 +16,11 @@ export async function priyaVisitsTomorrow(sandboxId: string) {
   const day = dayRangeOfDate(TOMORROW);
   return Visit.find({ sandboxId, caregiverCode: FIXTURES.priya, start: { $gte: day.from, $lt: day.to } }).sort({ start: 1 }).lean();
 }
+
+import { signSession } from "../../src/services/session/session.service";
+
+/** A sandbox for TODAY and a session token for it. */
+export async function newSession() {
+  const sandboxId = await newSandbox();
+  return { sandboxId, token: signSession(sandboxId), auth: { Authorization: `Bearer ${signSession(sandboxId)}` } };
+}

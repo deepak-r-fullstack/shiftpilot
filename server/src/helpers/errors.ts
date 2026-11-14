@@ -47,3 +47,16 @@ export class ServiceUnavailableError extends AppError {
     super(503, message);
   }
 }
+
+// The request was understood, but the change breaks a scheduling rule.
+export class RuleBreakError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(422, message, details);
+  }
+}
+
+export class TooManyRequestsError extends AppError {
+  constructor(message: string) {
+    super(429, message);
+  }
+}
