@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Check, ChevronDown, Pencil, X } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Pencil, X } from "lucide-react";
 import { DisplayBadge, DisplayButton, Tone } from "components/display_components";
 import { formatDay, formatTimeRange } from "utils/helper_functions/format";
 import { ChangeDecision, ProposedChange, VisitSnapshot } from "utils/types";
@@ -55,6 +55,7 @@ export const ChangeCard = ({ change, name, editable, busy, onDecide, onEdit }: C
       <div className="mt-3 grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
         {change.before ? <VisitLine visit={change.before} name={name} /> : <p className="text-sm text-ink-faint">No visit yet</p>}
         <ArrowRight className="hidden h-4 w-4 text-ink-faint sm:block" aria-hidden />
+        <ArrowDown className="h-4 w-4 text-ink-faint sm:hidden" aria-hidden />
         {change.kind === "cancel" ? (
           <p className="font-medium text-refused">Cancelled (units go back)</p>
         ) : (

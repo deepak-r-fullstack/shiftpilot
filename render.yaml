@@ -1,0 +1,55 @@
+# One-click deploy on Render (render.com -> New -> Blueprint -> pick this repo).
+# Website and API run as ONE free web service; the database is a free MongoDB Atlas cluster
+# (a replica set, which applying a plan needs for its transaction).
+services:
+  - type: web
+    name: shiftpilot
+    runtime: node
+    plan: free
+    # Close to the Atlas cluster in Mumbai, so each database call is quick.
+    region: singapore
+    # Dev dependencies (TypeScript, Vite) are needed to build, so include them.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start -w server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false # paste your Atlas connection string in the Render dashboard (add /shiftpilot before the ?)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        value: https://shiftpilot.sritaraksolutions.in
+      - key: DEMO_MODE
+        value: "true"
+      - key: SEED_ON_START
+        value: "true"
+      # The AI that plans changes. Leave LLM_PROVIDER as none until a key is set: the story buttons then play recorded runs.
+      - key: LLM_PROVIDER
+        value: none
+      - key: LLM_MODEL
+        value: ""
+      - key: LLM_API_KEY
+        sync: false
+      - key: AI_DAILY_USD_CAP
+        value: "1"
+      # Optional: apply plans through AgentGuard (see README, "Works with AgentGuard").
+      - key: AGENTGUARD_URL
+        value: https://agentguard.sritaraksolutions.in
+      - key: AGENTGUARD_PUBLIC_URL
+        value: https://agentguard.sritaraksolutions.in
+      - key: SHIFTPILOT_AGENT_KEY
+        sync: false # the same agk_ key AgentGuard has in its SHIFTPILOT_AGENT_KEY
+      - key: SHIFTPILOT_INTERNAL_SECRET
+        sync: false # the same secret AgentGuard has in its SHIFTPILOT_INTERNAL_SECRET
+      # Optional: record every agent run in AgentReplay.
+      - key: AGENTREPLAY_API_KEY
+        sync: false
+      - key: AGENTREPLAY_URL
+        sync: false
+      # The test-only in-memory MongoDB is not needed on the server; skip its download.
+      - key: MONGOMS_DISABLE_POSTINSTALL
+        value: "1"
