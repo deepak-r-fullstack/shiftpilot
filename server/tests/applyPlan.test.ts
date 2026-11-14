@@ -47,6 +47,12 @@ describe("applying and undoing plans", () => {
     return { id, visits };
   }
 
+  /** What Apply does before AgentGuard calls us: the plan is "applying". */
+  async function sent(id: string) {
+    await Proposal.updateOne({ _id: id }, { status: "applying" });
+    return id;
+  }
+
   it("keeps the internal endpoints behind the shared secret", async () => {
     const { id } = await approvedPlan();
     await request(app).get(`/api/internal/plans/${id}/facts`).expect(401);
@@ -63,6 +69,7 @@ describe("applying and undoing plans", () => {
 
   it("applies once, then undoes exactly, deleting created visits", async () => {
     const { id, visits } = await approvedPlan();
+    await sent(id);
     const [first, second] = await Promise.all([runPlan(id), runPlan(id)]);
     expect(first).toEqual({ applied: 4 });
     expect(second).toEqual({ applied: 4 });
@@ -81,6 +88,7 @@ describe("applying and undoing plans", () => {
 
   it("refuses to apply when a visit changed since the plan was made, and writes nothing", async () => {
     const { id, visits } = await approvedPlan();
+    await sent(id);
     await Visit.updateOne({ sandboxId, code: visits[0].code }, { $inc: { version: 1 } });
     const res = await request(app).post(`/api/internal/plans/${id}/run`).set(SECRET);
     expect(res.status).toBe(409);
@@ -93,6 +101,7 @@ describe("applying and undoing plans", () => {
 
   it("refuses to undo over newer work", async () => {
     const { id, visits } = await approvedPlan();
+    await sent(id);
     await runPlan(id);
     await Visit.updateOne({ sandboxId, code: visits[1].code }, { $inc: { version: 1 }, caregiverCode: "CG-05" });
     await expect(undoPlan(id)).rejects.toThrow("undo would overwrite newer work");
@@ -155,6 +164,106 @@ describe("applying and undoing plans", () => {
     const res = await request(app).post(`/api/proposals/${id}/apply`).set(auth);
     expect(res.body.data.proposal).toMatchObject({ status: "applied", guardStatus: "local" });
     expect(res.body.data.guard.agentGuardConnected).toBe(false);
+    await undoPlan(id);
+  });
+});
+
+describe("apply and undo, edge cases from review", () => {
+  let sandboxId: string;
+  let auth: Record<string, string>;
+  beforeAll(async () => {
+    await startTestDb();
+    ({ sandboxId, auth } = await newSession());
+  });
+  afterAll(stopTestDb);
+  afterEach(() => {
+    jest.restoreAllMocks();
+    env.AGENTGUARD_URL = "";
+    env.SHIFTPILOT_AGENT_KEY = "";
+  });
+
+  async function plan(changes: Parameters<typeof submitProposal>[3]) {
+    const result = await submitProposal(sandboxId, null, "Plan", changes);
+    if (!result.ok) throw new Error(JSON.stringify(result.failures));
+    const id = String(result.proposal._id);
+    await approveAll(sandboxId, id);
+    return id;
+  }
+
+  it("never runs a draft the coordinator has not sent", async () => {
+    const [visit] = await priyaVisitsTomorrow(sandboxId);
+    const id = await plan([{ kind: "assign", visitCode: visit.code, caregiverCode: "CG-02" }]);
+    const res = await request(app).post(`/api/internal/plans/${id}/run`).set(SECRET);
+    expect(res.status).toBe(409);
+    expect((await Visit.findOne({ sandboxId, code: visit.code }).lean())?.caregiverCode).toBe(FIXTURES.priya);
+  });
+
+  it("refuses an undo that would double-book", async () => {
+    const [visit] = await priyaVisitsTomorrow(sandboxId);
+    // Plan A cancels the visit; plan B then books the same client at the same time.
+    const a = await plan([{ kind: "cancel", visitCode: visit.code }]);
+    await request(app).post(`/api/proposals/${a}/apply`).set(auth).expect(200);
+    const b = await plan([
+      { kind: "create", clientCode: visit.clientCode, authorizationCode: visit.authorizationCode, caregiverCode: "CG-03", start: visit.start.toISOString(), end: visit.end.toISOString() },
+    ]);
+    await request(app).post(`/api/proposals/${b}/apply`).set(auth).expect(200);
+
+    const undo = await request(app).post(`/api/proposals/${a}/undo`).set(auth);
+    expect(undo.status).toBe(409);
+    expect(undo.body.message).toContain("Undo would break a scheduling rule");
+    expect((await Visit.findOne({ sandboxId, code: visit.code }).lean())?.status).toBe("cancelled");
+
+    // Undo B first, then A works again.
+    await request(app).post(`/api/proposals/${b}/undo`).set(auth).expect(200);
+    await request(app).post(`/api/proposals/${a}/undo`).set(auth).expect(200);
+    expect((await Visit.findOne({ sandboxId, code: visit.code }).lean())?.status).toBe("scheduled");
+  });
+
+  it("lets only one of two clashing plans apply at the same moment", async () => {
+    const [first, second] = await priyaVisitsTomorrow(sandboxId);
+    // Both plans give CG-04 a visit at the first visit's time: each is fine alone, not together.
+    const p1 = await plan([{ kind: "assign", visitCode: first.code, caregiverCode: "CG-04" }]);
+    const p2 = await plan([{ kind: "move", visitCode: second.code, caregiverCode: "CG-04", start: first.start.toISOString(), end: first.end.toISOString() }]);
+    const results = await Promise.all([
+      request(app).post(`/api/proposals/${p1}/apply`).set(auth),
+      request(app).post(`/api/proposals/${p2}/apply`).set(auth),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    const cg04 = await Visit.countDocuments({ sandboxId, caregiverCode: "CG-04", start: first.start });
+    expect(cg04).toBe(1);
+    const winner = results.find((r) => r.status === 200)!;
+    await request(app).post(`/api/proposals/${winner.body.data.proposal._id}/undo`).set(auth).expect(200);
+  });
+
+  it("shows a plan as applied, with Undo here, when AgentGuard timed out after it ran", async () => {
+    const [visit] = await priyaVisitsTomorrow(sandboxId);
+    const id = await plan([{ kind: "assign", visitCode: visit.code, caregiverCode: "CG-02" }]);
+    env.AGENTGUARD_URL = "https://guard.test";
+    env.SHIFTPILOT_AGENT_KEY = "agk_test";
+    jest.spyOn(global, "fetch").mockImplementation(async () => {
+      await runPlan(id); // AgentGuard called us and we applied it...
+      return new Response(JSON.stringify({ success: true, data: { actionId: "act-slow", status: "failed", message: "ShiftPilot did not answer." } }), { status: 200 }); // ...but it gave up waiting
+    });
+    const res = await request(app).post(`/api/proposals/${id}/apply`).set(auth);
+    expect(res.body.data.guard).toMatchObject({ status: "applied", canUndoHere: true });
+    env.AGENTGUARD_URL = "";
+    await request(app).post(`/api/proposals/${id}/undo`).set(auth).expect(200);
+    expect((await Visit.findOne({ sandboxId, code: visit.code }).lean())?.caregiverCode).toBe(FIXTURES.priya);
+  });
+
+  it("keeps Undo in AgentGuard when AgentGuard applied it", async () => {
+    const [visit] = await priyaVisitsTomorrow(sandboxId);
+    const id = await plan([{ kind: "assign", visitCode: visit.code, caregiverCode: "CG-02" }]);
+    env.AGENTGUARD_URL = "https://guard.test";
+    env.SHIFTPILOT_AGENT_KEY = "agk_test";
+    jest.spyOn(global, "fetch").mockImplementation(async () => {
+      await runPlan(id);
+      return new Response(JSON.stringify({ success: true, data: { actionId: "act-ok", status: "done", message: "Done." } }), { status: 200 });
+    });
+    await request(app).post(`/api/proposals/${id}/apply`).set(auth).expect(200);
+    const undo = await request(app).post(`/api/proposals/${id}/undo`).set(auth);
+    expect(undo.status).toBe(409);
+    expect(undo.body.message).toContain("AgentGuard");
     await undoPlan(id);
   });
 });

@@ -9,6 +9,8 @@ const sandboxSchema = new Schema(
     requestsDay: { type: String, default: "" }, // Denver date the counter below belongs to
     requestsUsed: { type: Number, default: 0 },
     nextVisitNumber: { type: Number, required: true },
+    // Bumped inside every apply and undo transaction: two at once conflict, so one waits and re-checks.
+    scheduleVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

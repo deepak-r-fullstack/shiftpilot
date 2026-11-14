@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { DisplayButton, DisplayError, DisplayLoading, DisplayPageHeader } from "components/display_components";
-import { useApplyProposal, useApproveAll, useDecideChange, useGuardStatus, useNames, useProposal } from "utils/hooks/useShiftPilotQueries";
+import { useApplyProposal, useApproveAll, useDecideChange, useGuardStatus, useNames, useProposal, useUndoHere } from "utils/hooks/useShiftPilotQueries";
 import { agencyDate, formatLongDay, dateLabel, mondayOf } from "utils/helper_functions/format";
 import { getErrorMessage } from "utils/services/api_services/apiClient";
 import { ProposedChange } from "utils/types";
@@ -24,6 +24,7 @@ export const ReviewScreen = () => {
   const decide = useDecideChange(id);
   const approveAll = useApproveAll(id);
   const apply = useApplyProposal(id);
+  const undo = useUndoHere(id);
   const [editing, setEditing] = useState<ProposedChange | null>(null);
 
   const groups = useMemo(() => {
@@ -99,7 +100,12 @@ export const ReviewScreen = () => {
         })}
       </div>
 
-      <ApplyBar proposal={proposal} guard={guard} approvedCount={approvedCount} pendingCount={pendingCount} applying={apply.isPending} onApply={() => apply.mutate(undefined)} />
+      <ApplyBar proposal={proposal} guard={guard} approvedCount={approvedCount} pendingCount={pendingCount} applying={apply.isPending} onApply={() => apply.mutate(undefined)}
+        undoing={undo.isPending}
+        onUndo={() => {
+          if (window.confirm("Put every visit in this plan back the way it was?")) undo.mutate(undefined);
+        }}
+      />
 
       {editing && <EditChangeDrawer proposalId={id} change={editing} onClose={() => setEditing(null)} />}
     </>

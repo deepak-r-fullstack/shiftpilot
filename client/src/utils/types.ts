@@ -120,6 +120,7 @@ export interface GuardInfo {
   guardMessage: string | null;
   guardUrl: string | null;
   agentGuardConnected: boolean;
+  canUndoHere: boolean;
 }
 
 export interface Candidate {

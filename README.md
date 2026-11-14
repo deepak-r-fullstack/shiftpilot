@@ -54,7 +54,7 @@ flowchart LR
 2. **No tool can change a visit.** The agent can only read and propose. `submit_proposal` checks every change against every rule *together* (so two changes in one plan can never clash with each other) and saves nothing if any rule fails; the agent gets the reasons and fixes the plan.
 3. **The coordinator reviews** each change: before → after, a one-line reason, units left (40 → 32), and the rule checks. *Edit* offers only caregivers who pass every rule, and checks again before saving.
 4. **Apply** sends the approved plan to AgentGuard as **one** action, `schedule.applyPlan`. AgentGuard's rules decide (plans that change more than 10 existing visits wait for a manager, who cannot be the coordinator), it records the decision in its hash-chained audit log, and it calls ShiftPilot back to run the plan. ShiftPilot re-checks every rule and writes all visits in **one database transaction**, refusing if any visit changed in the meantime.
-5. **Undo** happens in AgentGuard, which calls ShiftPilot to put every visit back, again only if nothing changed since.
+5. **Undo** happens in AgentGuard, which calls ShiftPilot to put every visit back, only if nothing changed since and every rule still passes. (Without AgentGuard, or if AgentGuard lost track of a plan, Undo is offered in ShiftPilot itself.)
 
 ## The rules (checked by code, never by the AI)
 
@@ -82,16 +82,18 @@ All days, weeks and times are Denver wall-clock time (the agency's zone), so a 9
 | What the AI may do | Read and propose only | Applying needs a person's approval and goes through AgentGuard. |
 | Choosing caregivers | Code ranks those who pass every rule (knows the client > nearby > spare hours); the AI picks from that list | The AI can never invent a caregiver. |
 | Building a schedule | Plain code spreads the units; continuity first (the caregiver who can take most visits gets them) | Exact unit maths; clients see the same face. |
-| Apply | One AgentGuard action per plan, one MongoDB transaction | One Undo puts the whole plan back; never half-applied. |
+| Apply | One AgentGuard action per plan, one MongoDB transaction that first locks the visitor's agency and re-checks every rule inside it | One Undo puts the whole plan back; never half-applied; two plans applied at the same moment cannot both double-book. |
+| Undo | Re-checks the rules for every visit it brings back | Undoing an old plan can never double-book a slot a newer plan used. |
+| Who is right about the visits | ShiftPilot's own record | If AgentGuard gives up waiting on a slow run that did happen, the plan still shows as applied, and Undo is offered in ShiftPilot. |
 | Concurrency | Visit `version` checks, atomic draft → applying switch, idempotency keys | Two clicks or two tabs apply once; a plan never overwrites newer work. |
 | Low-risk changes | Code marks a ≤ 15-minute move with the same caregiver as auto-approved | Small fixes need no click, and are still shown and undoable. |
-| Public demo safety | Private sandbox per visitor (24 h), 10 typed requests per visitor per day, a hard daily AI spend cap | Strangers cannot see each other's data or run up a bill. When the cap is reached, the story buttons play a recorded real run. |
+| Public demo safety | Private sandbox per visitor (24 h), 10 typed requests per visitor per day, a hard daily AI spend cap (counted step by step, so a failed run counts too; a closed tab stops the run) | Strangers cannot see each other's data or run up a bill. When the cap is reached, the story buttons switch to a clearly labelled scripted planner that makes the same real tool calls, so review, Apply and Undo still work. |
 | Time | Luxon, `America/Denver` everywhere | Days, weeks and availability are what the coordinator sees on the clock. |
 
 ## Quality: tests and evals
 
 ```bash
-npm test          # 89 tests: rules, unit maths, candidates, seed, proposals, agent (scripted model), apply/undo, MCP, AgentReplay
+npm test          # 95 tests: rules, unit maths, candidates, seed, proposals, agent (scripted model), apply/undo, MCP, AgentReplay
 npm run evals     # 30 fixed scenarios against the real model, checked by code
 npm run check:browser   # the whole journey in a real browser, desktop and phone
 ```
@@ -152,7 +154,7 @@ FAKE_AI=stories npm run dev
 npm run dev
 ```
 
-Open http://localhost:5174 and press **Start the demo**. After setting a real key, `npm run record-stories -w server` saves one real run of each story, played back when live AI is off or the daily budget is used up.
+Open http://localhost:5174 and press **Start the demo**. Without a key (or once the daily budget is used up) the four story buttons still work: a scripted planner makes the same real tool calls, and the screen says so. Typed requests need live AI.
 
 ## Deploy (free)
 
@@ -169,10 +171,10 @@ shiftpilot/
       api/routes.ts               every endpoint and who may call it
       services/
         scheduling/               ruleChecker (final say), scheduleBuilder, candidateFinder, changeChecker
-        agent/                    agent loop, tools, prompt, model choice, scripted story model
+        agent/                    agent loop, tools, prompt, model choice, scripted story planner
         proposals/                proposals, review, apply and undo (one transaction)
         integrations/             AgentGuard client, AgentReplay recording
-        demo/                     seeded fake agency, visitor sandboxes, limits, cost cap, recorded runs
+        demo/                     seeded fake agency, visitor sandboxes, limits, cost cap
         mcp/                      the same tools over MCP
     evals/                        30 scenarios, code checks, score report
     tests/                        Jest + Supertest + in-memory MongoDB replica set

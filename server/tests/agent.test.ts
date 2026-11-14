@@ -5,7 +5,6 @@ import { Proposal } from "../src/models/proposal.model";
 import { Sandbox } from "../src/models/sandbox.model";
 import { Visit } from "../src/models/visit.model";
 import { setModelOverride } from "../src/services/agent/model";
-import { saveRun } from "../src/services/demo/savedRuns";
 import { todayInDenver } from "../src/utils/time";
 import { newSession, priyaVisitsTomorrow, TOMORROW } from "./helpers/fixtures";
 import { parseEvents, scriptedModel } from "./helpers/scriptedModel";
@@ -128,32 +127,41 @@ describe("the scheduling agent", () => {
       expect(story.status).toBe(200);
     });
 
-    it("plays a recorded story when the daily budget is used up", async () => {
-      await saveRun("priya-sick", [
-        { type: "tool", name: "find_visits", summary: "Found 3 visits for Priya Nair" },
-        { type: "proposal", proposalId: "x", summary: "Cover Priya", changes: 3 },
-        { type: "done" },
-      ]);
+    it("runs story buttons with the scripted planner when the daily budget is used up", async () => {
       await CostLedger.updateOne({ day: todayInDenver() }, { usdSpent: 99 }, { upsert: true });
-      setModelOverride(scriptedModel([{ text: "should not run" }]));
+      setModelOverride(scriptedModel([{ throws: "the live model must not be called" }]));
       const res = await request(app).post("/api/requests").set(auth).send({ storyKey: "priya-sick" });
       const events = parseEvents(res.text);
-      expect(events[0]).toEqual({ type: "status", text: "Recorded run, live AI resumes tomorrow" });
-      expect(events.some((e) => e.type === "proposal")).toBe(false);
-      expect(events.some((e) => e.type === "tool" && e.name === "find_visits")).toBe(true);
+      expect(events[0].text).toContain("Live AI is resting for today");
+      expect(events[0].text).toContain("scripted planner");
+      // A real plan in the visitor's own agency, so review, apply and undo still work.
+      const proposal = events.find((e) => e.type === "proposal");
+      expect(proposal).toBeTruthy();
+      expect((await Proposal.findById(proposal.proposalId).lean())?.sandboxId).toBe(sandboxId);
 
       const free = await request(app).post("/api/requests").set(auth).send({ text: "Priya is sick tomorrow" });
       expect(free.status).toBe(503);
       await CostLedger.deleteMany({});
     });
 
-    it("plays recorded stories when live AI is off", async () => {
+    it("runs story buttons with the scripted planner when live AI is off", async () => {
       setModelOverride(null);
-      const res = await request(app).post("/api/requests").set(auth).send({ storyKey: "priya-sick" });
-      expect(parseEvents(res.text)[0].text).toContain("Recorded run");
+      const res = await request(app).post("/api/requests").set(auth).send({ storyKey: "rao-move" });
+      const events = parseEvents(res.text);
+      expect(events[0].text).toContain("Live AI is not switched on");
+      expect(events.some((e) => e.type === "proposal")).toBe(true);
       const options = await request(app).get("/api/requests/options").set(auth);
       expect(options.body.data.liveAi).toBe(false);
       expect(options.body.data.stories).toHaveLength(4);
+    });
+
+    it("counts the cost of a run that fails halfway", async () => {
+      await CostLedger.deleteMany({});
+      setModelOverride(
+        scriptedModel([{ tools: [{ name: "find_visits", input: { caregiver: "Priya", fromDate: TOMORROW, toDate: TOMORROW } }] }, { throws: "provider down" }])
+      );
+      await request(app).post("/api/requests").set(auth).send({ text: "Priya is sick tomorrow" });
+      expect((await CostLedger.findOne({ day: todayInDenver() }).lean())?.usdSpent).toBeGreaterThan(0);
     });
   });
 });

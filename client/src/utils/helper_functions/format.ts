@@ -60,6 +60,10 @@ export function agencyInstant(date: string, hhmm: string): string {
     const diffMinutes = (h * 60 + m) - (sh * 60 + sm) - dayShift * 1440;
     guess.setUTCMinutes(guess.getUTCMinutes() + diffMinutes);
   }
+  // On the spring daylight-saving day, 2:00-2:59 does not exist on the clock.
+  if (agencyHHmm(guess.toISOString()) !== hhmm || agencyDate(guess) !== date) {
+    throw new Error("That time does not exist on this day (the clocks change). Pick another time.");
+  }
   return guess.toISOString();
 }
 

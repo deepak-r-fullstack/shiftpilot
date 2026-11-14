@@ -7,9 +7,9 @@ import { ChangeRequest } from "../models/changeRequest.model";
 import { runAgent } from "../services/agent/agentLoop";
 import { AgentEvent } from "../services/agent/events";
 import { getModel } from "../services/agent/model";
+import { createStoryModel } from "../services/agent/storyModel";
 import { canSpend, recordSpend } from "../services/demo/costGuard";
 import { freeRequestsLeft, takeFreeRequest } from "../services/demo/requestLimit";
-import { playSavedRun } from "../services/demo/savedRuns";
 import { findStory, STORIES } from "../services/demo/stories";
 import { startRecording } from "../services/integrations/agentReplay";
 import { logger, serializeError } from "../utils/logger";
@@ -64,30 +64,32 @@ export async function createAgentRequest(_req: Request, res: Response) {
   }
   if (!story) await takeFreeRequest(sandboxId);
 
-  if (!live) {
-    const { emit } = openStream(res);
-    const played = await playSavedRun(story!.key, model ? "budget" : "off", emit);
-    if (!played) emit({ type: "error", message: "This story has not been recorded yet. Please try again later." });
-    emit({ type: "done" });
-    return res.end();
-  }
+  // No live AI right now (not set up, or today's budget is used): the story buttons still work,
+  // with a scripted planner that makes the same real tool calls. The screen says so plainly.
+  const planner = live ? model! : createStoryModel();
+  const reason = model ? "Live AI is resting for today (daily budget used)" : "Live AI is not switched on for this demo";
 
   const changeRequest = await ChangeRequest.create({ sandboxId, text, storyKey: story?.key ?? null, createdBy: coordinator.email });
   const { emit } = openStream(res);
-  emit({ type: "status", text: "Reading your request…" });
+  emit({ type: "status", text: live ? "Reading your request…" : `${reason}, so a scripted planner runs this story. You can still review, apply and undo.` });
+  const abort = new AbortController();
+  res.on("close", () => {
+    if (!res.writableFinished) abort.abort();
+  });
   try {
     const result = await runAgent({
       sandboxId,
       requestId: String(changeRequest._id),
       text,
-      model: model!,
+      model: planner,
       emit,
-      recorder: startRecording(text, sandbox.label),
+      recorder: live ? startRecording(text, sandbox.label) : null,
+      abortSignal: abort.signal,
     });
     await recordSpend(result.usd);
     await ChangeRequest.updateOne(
       { _id: changeRequest._id },
-      { status: result.proposalId ? "proposed" : result.asked ? "asked" : "failed", proposalId: result.proposalId }
+      { status: result.proposalId ? "proposed" : result.asked ? "asked" : "failed", proposalId: result.proposalId, ...(live ? {} : { scripted: true }) }
     );
   } catch (err) {
     logger.error("agent request failed", serializeError(err));

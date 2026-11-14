@@ -47,7 +47,8 @@ export const RequestPanel = () => {
     send({ text: text.trim() });
   };
 
-  const answer = (choice: string) => send({ text: `${lastText.current}\n(The coordinator means: ${choice})` });
+  // The answer goes back with the question's request, kept short enough for the 500-character limit.
+  const answer = (choice: string) => send({ text: `${lastText.current.slice(0, 400)}\n(The coordinator means: ${choice.slice(0, 80)})` });
 
   return (
     <section className="rounded-lg border border-line bg-sheet p-4" aria-label="Ask the scheduling assistant">
@@ -87,7 +88,7 @@ export const RequestPanel = () => {
         />
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-xs text-ink-faint">
-            {options?.liveAi === false ? "Live AI is resting: the story buttons play recorded runs." : `${options?.freeRequestsLeft ?? "…"} of 10 free requests left today`}
+            {options?.liveAi === false ? "Live AI is resting: the story buttons use a scripted planner." : `${options?.freeRequestsLeft ?? "…"} of 10 free requests left today`}
           </span>
           <DisplayButton type="submit" variant="primary" loading={running} disabled={text.trim().length < 3 || options?.liveAi === false} icon={<Send className="h-4 w-4" />}>
             Send
@@ -97,7 +98,7 @@ export const RequestPanel = () => {
 
       <LiveSteps events={events} running={running} />
 
-      {question?.choices && question.choices.length > 0 && !running && (
+      {question?.choices && question.choices.length > 0 && !running && options?.liveAi && (
         <div className="mt-3 flex flex-wrap gap-2">
           {question.choices.map((choice) => (
             <DisplayButton key={choice} onClick={() => answer(choice)}>

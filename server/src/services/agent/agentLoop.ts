@@ -24,6 +24,8 @@ export interface RunAgentInput {
   model: LanguageModel;
   emit: Emit;
   recorder?: RecordingHandle | null;
+  // Stops the run when the coordinator closes the page, so nobody pays for an answer nobody reads.
+  abortSignal?: AbortSignal;
 }
 
 export interface RunAgentResult {
@@ -51,15 +53,17 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       stopWhen: [stepCountIs(MAX_STEPS), stopWhenDone],
       timeout: TIMEOUT_MS,
       maxRetries: 1,
+      abortSignal: input.abortSignal,
       onStepFinish: (step: any) => {
         steps += 1;
+        // Counted step by step, so a run that fails or times out halfway still counts towards the daily cap.
+        usd += estimateUsd(step.usage ?? {});
         const text = String(step.text ?? "").trim();
         if (text) emit({ type: "status", text: text.slice(0, 500) });
         recorder?.llm({ name: `step ${steps}`, output: text || undefined, model: modelName(), tokens: (step.usage?.inputTokens ?? 0) + (step.usage?.outputTokens ?? 0) });
         for (const call of step.toolResults ?? []) recorder?.tool(call.toolName, call.input, call.output);
       },
     } as any);
-    usd = estimateUsd(result.totalUsage ?? {});
     if (state.proposalId) {
       emit({ type: "proposal", proposalId: state.proposalId, summary: state.proposalSummary, changes: state.changeCount });
     } else if (!state.asked && !String(result.text ?? "").trim()) {

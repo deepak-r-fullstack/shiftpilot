@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 import { Authorization } from "../../models/authorization.model";
 import { Caregiver } from "../../models/caregiver.model";
 import { Client } from "../../models/client.model";
@@ -94,14 +94,18 @@ export async function resetSandbox(sandboxId: string, today = agencyToday()): Pr
   await Sandbox.updateOne({ _id: sandboxId }, { nextVisitNumber });
 }
 
-/** Expired sandboxes lose their scheduling records too (the TTL index only removes the Sandbox itself). */
-export async function deleteOrphanedSandboxData(): Promise<number> {
+/**
+ * Expired sandboxes lose their scheduling records too (the TTL index only removes the Sandbox itself).
+ * Only sandboxes made more than 2 hours ago are touched, so one being created right now is never cleared.
+ */
+export async function deleteOrphanedSandboxData(now = Date.now()): Promise<number> {
   const live = new Set((await Sandbox.find({}, { _id: 1 }).lean()).map((s) => String(s._id)));
   live.add(TEMPLATE_SANDBOX);
+  const oldEnough = (id: string) => Types.ObjectId.isValid(id) && new Types.ObjectId(id).getTimestamp().getTime() < now - 2 * 3600 * 1000;
   let removed = 0;
   for (const model of [...SCHEDULING_MODELS, ChangeRequest, Proposal, AppliedPlan] as Model<any>[]) {
     const ids: string[] = await model.distinct("sandboxId");
-    const dead = ids.filter((id) => !live.has(id));
+    const dead = ids.filter((id) => !live.has(id) && oldEnough(id));
     if (dead.length) removed += (await model.deleteMany({ sandboxId: { $in: dead } })).deletedCount ?? 0;
   }
   return removed;

@@ -10,7 +10,6 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/scripts/seed.ts",
-    "record-stories": "tsx src/scripts/recordStories.ts",
     "evals": "tsx evals/run.ts",
     "test": "jest --runInBand"
   },

@@ -78,6 +78,7 @@ router.put(
 );
 router.get("/proposals/:id/changes/:changeId/candidates", apiLimiter, authenticateSession, asyncHandler(proposalsController.getCandidates));
 router.post("/proposals/:id/apply", apiLimiter, authenticateSession, asyncHandler(proposalsController.apply));
+router.post("/proposals/:id/undo", apiLimiter, authenticateSession, asyncHandler(proposalsController.undo));
 router.get("/proposals/:id/guard-status", apiLimiter, authenticateSession, asyncHandler(proposalsController.getGuardStatus));
 router.post("/integrations/wake", apiLimiter, asyncHandler(proposalsController.wakeAgentGuard));
 

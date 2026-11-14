@@ -8,7 +8,9 @@ const changeRequestSchema = new Schema(
     text: { type: String, required: true },
     storyKey: { type: String, default: null },
     createdBy: { type: String, required: true },
-    status: { type: String, enum: ["running", "proposed", "asked", "failed", "replayed"], default: "running" },
+    status: { type: String, enum: ["running", "proposed", "asked", "failed"], default: "running" },
+    // True when the scripted planner ran a story because live AI was off.
+    scripted: { type: Boolean, default: false },
     proposalId: { type: Schema.Types.ObjectId, ref: "Proposal", default: null },
   },
   { timestamps: true }

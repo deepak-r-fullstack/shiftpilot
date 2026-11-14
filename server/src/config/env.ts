@@ -55,8 +55,10 @@ export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV.toLowerCase() === "production";
 export const isTest = env.NODE_ENV.toLowerCase() === "test";
+// Development-only conveniences (the dev JWT secret, FAKE_AI) work ONLY here, never on a host that forgot NODE_ENV.
+export const isLocalOrTest = ["local", "test", "development"].includes(env.NODE_ENV.toLowerCase());
 
-if (isProduction && env.JWT_SECRET === DEV_JWT_SECRET) {
-  console.error("JWT_SECRET must be set in production.");
+if (!isLocalOrTest && env.JWT_SECRET === DEV_JWT_SECRET) {
+  console.error("JWT_SECRET must be set outside local development.");
   process.exit(1);
 }

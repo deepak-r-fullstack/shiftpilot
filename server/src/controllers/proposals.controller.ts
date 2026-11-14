@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { successResponseWithData } from "../helpers/response";
 import { getSandboxId, getSession } from "../middlewares/sandbox.middleware";
-import { applyProposal, describeGuard, refreshGuardStatus } from "../services/proposals/apply.service";
+import { applyProposal, describeGuard, refreshGuardStatus, undoHere } from "../services/proposals/apply.service";
 import { wake } from "../services/integrations/agentGuard.client";
 import { startRecording } from "../services/integrations/agentReplay";
 import { approveAll, candidatesForChange, decideChange, editChange, getProposal } from "../services/proposals/proposal.service";
@@ -62,4 +62,9 @@ export async function getGuardStatus(req: Request, res: Response) {
 export async function wakeAgentGuard(_req: Request, res: Response) {
   void wake();
   return successResponseWithData(res, "Waking the safety layer.", { ok: true });
+}
+
+export async function undo(req: Request, res: Response) {
+  const proposal = await undoHere(getSandboxId(res), req.params.id);
+  return successResponseWithData(res, "Plan undone. Every visit is back.", { proposal, guard: describeGuard(proposal) });
 }

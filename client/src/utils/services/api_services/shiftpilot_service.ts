@@ -42,6 +42,7 @@ export const proposalService = {
     unwrap<Proposal>(apiClient.put(`/proposals/${id}/changes/${changeId}`, input)),
   candidates: (id: string, changeId: string) => unwrap<Candidate[]>(apiClient.get(`/proposals/${id}/changes/${changeId}/candidates`)),
   apply: (id: string) => unwrap<{ proposal: Proposal; guard: GuardInfo }>(apiClient.post(`/proposals/${id}/apply`)),
+  undo: (id: string) => unwrap<{ proposal: Proposal; guard: GuardInfo }>(apiClient.post(`/proposals/${id}/undo`)),
   guardStatus: (id: string) => unwrap<{ proposal: Proposal; guard: GuardInfo }>(apiClient.get(`/proposals/${id}/guard-status`)),
 };
 

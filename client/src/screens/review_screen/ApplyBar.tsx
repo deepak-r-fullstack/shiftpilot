@@ -1,4 +1,4 @@
-import { ExternalLink, Send } from "lucide-react";
+import { ExternalLink, RotateCcw, Send } from "lucide-react";
 import { DisplayBadge, DisplayButton, Tone } from "components/display_components";
 import { GuardInfo, Proposal, ProposalStatus } from "utils/types";
 
@@ -21,12 +21,17 @@ interface ApplyBarProps {
   pendingCount: number;
   applying: boolean;
   onApply: () => void;
+  undoing: boolean;
+  onUndo: () => void;
 }
 
-export const ApplyBar = ({ proposal, guard, approvedCount, pendingCount, applying, onApply }: ApplyBarProps) => {
+export const ApplyBar = ({ proposal, guard, approvedCount, pendingCount, applying, onApply, undoing, onUndo }: ApplyBarProps) => {
   const status = STATUS[proposal.status];
+  const undoHere = Boolean(guard?.canUndoHere);
+  // When Undo is offered here, the AgentGuard link is only for reading the record.
   const guardUrl = guard?.guardUrl;
-  const linkLabel = proposal.status === "applied" ? "Undo in AgentGuard" : proposal.status === "pending_approval" ? "Open in AgentGuard" : "See it in AgentGuard";
+  const linkLabel =
+    proposal.status === "applied" && !undoHere ? "Undo in AgentGuard" : proposal.status === "pending_approval" ? "Open in AgentGuard" : "See it in AgentGuard";
 
   return (
     <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-line bg-sheet/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
@@ -48,6 +53,11 @@ export const ApplyBar = ({ proposal, guard, approvedCount, pendingCount, applyin
                 {linkLabel}
               </DisplayButton>
             </a>
+          )}
+          {undoHere && (
+            <DisplayButton variant="secondary" loading={undoing} onClick={onUndo} icon={<RotateCcw className="h-4 w-4" />}>
+              Undo this plan
+            </DisplayButton>
           )}
           {proposal.status === "draft" && (
             <DisplayButton variant="primary" size="lg" disabled={approvedCount === 0} loading={applying} onClick={onApply} icon={<Send className="h-4 w-4" />}>

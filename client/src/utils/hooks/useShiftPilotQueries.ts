@@ -101,3 +101,8 @@ export function useApproveAll(id: string) {
 export function useApplyProposal(id: string) {
   return useProposalMutation(id, () => proposalService.apply(id));
 }
+
+/** Undo in ShiftPilot itself: only offered when AgentGuard is not connected or lost track of the plan. */
+export function useUndoHere(id: string) {
+  return useProposalMutation(id, () => proposalService.undo(id), "Plan undone. Every visit is back.");
+}
