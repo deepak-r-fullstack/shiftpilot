@@ -4,6 +4,7 @@ import { successResponseWithData } from "../helpers/response";
 import { getSandboxId, getSession } from "../middlewares/sandbox.middleware";
 import { applyProposal, describeGuard, refreshGuardStatus } from "../services/proposals/apply.service";
 import { wake } from "../services/integrations/agentGuard.client";
+import { startRecording } from "../services/integrations/agentReplay";
 import { approveAll, candidatesForChange, decideChange, editChange, getProposal } from "../services/proposals/proposal.service";
 
 export const decisionSchema = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -42,8 +43,11 @@ export async function getCandidates(req: Request, res: Response) {
 }
 
 export async function apply(req: Request, res: Response) {
-  const { coordinator } = getSession(res);
-  const proposal = await applyProposal(getSandboxId(res), req.params.id, coordinator.email);
+  const { coordinator, sandbox } = getSession(res);
+  const sandboxId = getSandboxId(res);
+  const current = await getProposal(sandboxId, req.params.id);
+  const recorder = current.status === "draft" ? startRecording(`Apply: ${current.summary}`, sandbox.label) : null;
+  const proposal = await applyProposal(sandboxId, req.params.id, coordinator.email, recorder);
   return successResponseWithData(res, "Plan sent.", { proposal, guard: describeGuard(proposal) });
 }
 

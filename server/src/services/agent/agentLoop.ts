@@ -36,7 +36,7 @@ export interface RunAgentResult {
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const { emit, recorder } = input;
-  const state: AgentToolContext["state"] = { proposalId: null, proposalSummary: "", changeCount: 0, asked: false, plans: new Map() };
+  const state: AgentToolContext["state"] = { proposalId: null, proposalSummary: "", changeCount: 0, asked: false };
   const tools = createTools({ sandboxId: input.sandboxId, requestId: input.requestId, emit, state });
   const stopWhenDone = () => Boolean(state.proposalId) || state.asked;
 

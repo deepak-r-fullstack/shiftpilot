@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Tool, ToolSet } from "ai";
 import { z } from "zod";
 import { AppError } from "../../helpers/errors";
@@ -29,7 +30,25 @@ export interface AgentToolContext {
   requestId: string | null;
   emit: Emit;
   // Filled in by the tools; read by the agent loop.
-  state: { proposalId: string | null; proposalSummary: string; changeCount: number; asked: boolean; plans: Map<string, BuiltPlan> };
+  state: { proposalId: string | null; proposalSummary: string; changeCount: number; asked: boolean };
+}
+
+// Built plans wait here until submit_proposal uses them. Kept outside one run, so
+// MCP clients (one HTTP request per tool call) can build and submit in two calls.
+const PLAN_TTL_MS = 30 * 60 * 1000;
+const builtPlans = new Map<string, { plan: BuiltPlan; sandboxId: string; expiresAt: number }>();
+
+function keepPlan(sandboxId: string, plan: BuiltPlan): string {
+  const now = Date.now();
+  for (const [id, entry] of builtPlans) if (entry.expiresAt < now) builtPlans.delete(id);
+  const id = `plan-${crypto.randomBytes(4).toString("hex")}`;
+  builtPlans.set(id, { plan, sandboxId, expiresAt: now + PLAN_TTL_MS });
+  return id;
+}
+
+function takePlan(sandboxId: string, id: string): BuiltPlan | null {
+  const entry = builtPlans.get(id);
+  return entry && entry.sandboxId === sandboxId && entry.expiresAt > Date.now() ? entry.plan : null;
 }
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
@@ -238,8 +257,7 @@ export function createTools(ctx: AgentToolContext): ToolSet {
       execute: async (input) =>
         safely(async () => {
           const plan = await buildPlan(sandboxId, { ...input, days: input.days as any });
-          const planId = `plan-${ctx.state.plans.size + 1}`;
-          ctx.state.plans.set(planId, plan);
+          const planId = keepPlan(sandboxId, plan);
           const open = plan.visits.filter((v) => !v.caregiverCode).length;
           const caregivers = [...new Set(plan.visits.map((v) => v.caregiverName).filter(Boolean))];
           emit({ type: "tool", name: "build_schedule", summary: `Planned ${plan.visits.length} visits for ${plan.clientName} using ${plan.result.unitsScheduled} of ${plan.result.unitsAvailable} units` });
@@ -270,7 +288,7 @@ export function createTools(ctx: AgentToolContext): ToolSet {
           if (ctx.state.proposalId) return { error: "A proposal was already saved for this request." };
           const all: ProposedChangeInput[] = changes.map((change) => ({ ...toChangeInput(change), reasons: [change.reason] }));
           if (buildPlanId) {
-            const plan = ctx.state.plans.get(buildPlanId);
+            const plan = takePlan(sandboxId, buildPlanId);
             if (!plan) return { error: `Unknown buildPlanId ${buildPlanId}.` };
             plan.visits.forEach((v) =>
               all.push({ kind: "create", clientCode: plan.clientCode, authorizationCode: plan.authorizationCode, caregiverCode: v.caregiverCode, start: v.start.toISOString(), end: v.end.toISOString(), reasons: [v.reason] })

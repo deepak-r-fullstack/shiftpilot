@@ -10,6 +10,7 @@ import * as scheduleController from "../controllers/schedule.controller";
 import * as proposalsController from "../controllers/proposals.controller";
 import * as requestsController from "../controllers/requests.controller";
 import * as internalController from "../controllers/internal.controller";
+import * as mcpController from "../controllers/mcp.controller";
 import { requireInternalSecret } from "../middlewares/internalSecret.middleware";
 
 // Every endpoint and who may call it, in one place.
@@ -73,6 +74,11 @@ router.get("/proposals/:id/changes/:changeId/candidates", apiLimiter, authentica
 router.post("/proposals/:id/apply", apiLimiter, authenticateSession, asyncHandler(proposalsController.apply));
 router.get("/proposals/:id/guard-status", apiLimiter, authenticateSession, asyncHandler(proposalsController.getGuardStatus));
 router.post("/integrations/wake", apiLimiter, asyncHandler(proposalsController.wakeAgentGuard));
+
+// ---- MCP: the agent's read-and-propose tools for any MCP client (Bearer = demo session token) ----
+router.post("/mcp", agentLimiter, authenticateSession, asyncHandler(mcpController.handleMcpRequest));
+router.get("/mcp", apiLimiter, mcpController.rejectMcpMethod);
+router.delete("/mcp", apiLimiter, mcpController.rejectMcpMethod);
 
 // ---- internal: AgentGuard runs and undoes approved plans (shared secret) ----
 router.get("/internal/plans/:proposalId/facts", apiLimiter, requireInternalSecret, asyncHandler(internalController.getPlanFacts));
