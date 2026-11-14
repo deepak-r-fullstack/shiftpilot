@@ -55,7 +55,13 @@ router.post(
 
 // ---- proposals (review before anything changes) ----
 router.get("/proposals/:id", apiLimiter, authenticateSession, asyncHandler(proposalsController.getProposalById));
-router.post("/proposals/:id/approve-all", apiLimiter, authenticateSession, asyncHandler(proposalsController.approveAllChanges));
+router.post(
+  "/proposals/:id/approve-all",
+  apiLimiter,
+  authenticateSession,
+  validateRequest(proposalsController.approveAllSchema),
+  asyncHandler(proposalsController.approveAllChanges)
+);
 router.post(
   "/proposals/:id/changes/:changeId/decision",
   apiLimiter,

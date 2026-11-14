@@ -6,7 +6,7 @@ import { getSandboxId, getSession } from "../middlewares/sandbox.middleware";
 import { ChangeRequest } from "../models/changeRequest.model";
 import { runAgent } from "../services/agent/agentLoop";
 import { AgentEvent } from "../services/agent/events";
-import { getModel, isAiConfigured } from "../services/agent/model";
+import { getModel } from "../services/agent/model";
 import { canSpend, recordSpend } from "../services/demo/costGuard";
 import { freeRequestsLeft, takeFreeRequest } from "../services/demo/requestLimit";
 import { playSavedRun } from "../services/demo/savedRuns";
@@ -23,7 +23,7 @@ export const agentRequestSchema = z
 
 /** What the request box needs to know: stories, free requests left, whether live AI is on. */
 export async function getRequestOptions(_req: Request, res: Response) {
-  const live = isAiConfigured() && (await canSpend());
+  const live = Boolean(getModel()) && (await canSpend());
   return successResponseWithData(res, "Request options.", {
     stories: STORIES,
     freeRequestsLeft: await freeRequestsLeft(getSandboxId(res)),

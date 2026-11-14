@@ -20,7 +20,7 @@ const booleanText = (fallback: "true" | "false") =>
 
 const envSchema = z.object({
   NODE_ENV: z.string().default("local"),
-  PORT: z.coerce.number().int().positive().default(5060),
+  PORT: z.coerce.number().int().positive().default(5070),
   MONGO_URI: z.string().min(1).default("mongodb://127.0.0.1:27017/shiftpilot"),
   CLIENT_ORIGIN: z.string().default("http://localhost:5174"),
   JWT_SECRET: z.string().min(16).default(DEV_JWT_SECRET),

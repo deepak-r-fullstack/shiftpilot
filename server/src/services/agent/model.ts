@@ -1,7 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { env } from "../../config/env";
+import { env, isProduction } from "../../config/env";
 
 // ---------------------------------------------------------------------------
 // The AI model that plans schedule changes. One env setting switches provider.
@@ -37,6 +37,12 @@ export function setModelOverride(model: LanguageModel | null | undefined) {
 /** The configured model, or null when live AI is off. */
 export function getModel(): LanguageModel | null {
   if (modelOverride !== undefined) return modelOverride;
+  // Local development and the browser check only: a scripted model that plays the four stories.
+  if (process.env.FAKE_AI === "stories" && !isProduction) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    modelOverride = (require("./storyModel") as typeof import("./storyModel")).createStoryModel();
+    return modelOverride;
+  }
   if (!isAiConfigured()) return null;
   if (env.LLM_PROVIDER === "anthropic") return createAnthropic({ apiKey: env.LLM_API_KEY })(modelName());
   return createOpenAI({ apiKey: env.LLM_API_KEY })(modelName());

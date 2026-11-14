@@ -45,10 +45,10 @@
 - Create: `server/package.json`, `server/tsconfig.json`, `server/tsconfig.build.json`, `server/jest.config.js`, `server/env/local.env.example`
 - Create: `server/src/{server.ts, app.ts, config/env.ts, api/routes.ts, loaders/database.ts, helpers/{response.ts, asyncHandler.ts, errors.ts}, middlewares/{errorHandler.middleware.ts, validateRequest.middleware.ts}, utils/logger.ts}`
 - Create: `server/tests/{setupEnv.ts, helpers/testDb.ts, health.test.ts}`
-- Create: `client/` Vite + React + Tailwind scaffold (`package.json`, `vite.config.ts` proxying `/api` to `:5060`, `tailwind.config.js`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/index.css`)
+- Create: `client/` Vite + React + Tailwind scaffold (`package.json`, `vite.config.ts` proxying `/api` to `:5070`, `tailwind.config.js`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/index.css`)
 
 **Interfaces:**
-- Produces: `createApp(): Express`; `env` (Zod-parsed) with `PORT=5060`, `MONGO_URI`, `CLIENT_ORIGIN`, `JWT_SECRET`, `DEMO_MODE`, `LLM_PROVIDER ('anthropic'|'openai'|'none')`, `LLM_API_KEY`, `LLM_MODEL`, `AI_DAILY_USD_CAP`, `AGENTGUARD_URL`, `AGENTGUARD_PUBLIC_URL`, `SHIFTPILOT_AGENT_KEY`, `SHIFTPILOT_INTERNAL_SECRET`, `AGENTREPLAY_API_KEY`, `AGENTREPLAY_URL`; `startTestDb()` and `stopTestDb()` using `MongoMemoryReplSet` (transactions need a replica set), honouring `TEST_MONGO_URI`.
+- Produces: `createApp(): Express`; `env` (Zod-parsed) with `PORT=5070`, `MONGO_URI`, `CLIENT_ORIGIN`, `JWT_SECRET`, `DEMO_MODE`, `LLM_PROVIDER ('anthropic'|'openai'|'none')`, `LLM_API_KEY`, `LLM_MODEL`, `AI_DAILY_USD_CAP`, `AGENTGUARD_URL`, `AGENTGUARD_PUBLIC_URL`, `SHIFTPILOT_AGENT_KEY`, `SHIFTPILOT_INTERNAL_SECRET`, `AGENTREPLAY_API_KEY`, `AGENTREPLAY_URL`; `startTestDb()` and `stopTestDb()` using `MongoMemoryReplSet` (transactions need a replica set), honouring `TEST_MONGO_URI`.
 - Copy `response.ts`, `asyncHandler.ts`, `errors.ts`, `validateRequest.middleware.ts` and `errorHandler.middleware.ts` patterns from AgentGuard.
 
 - [ ] **Step 1:** Write `health.test.ts`: `GET /api/health` → 200, `{ success: true, data: { status: "ok" } }`.

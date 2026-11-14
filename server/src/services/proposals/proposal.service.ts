@@ -3,7 +3,7 @@ import { BadRequestError, ConflictError, NotFoundError, RuleBreakError } from ".
 import { Proposal, ProposalDoc } from "../../models/proposal.model";
 import { findCandidatesForVisit } from "../scheduling/candidates.service";
 import { ChangeInput, CheckedChange, checkChange, factsOf, resolveChange, VisitShape } from "../scheduling/changeChecker";
-import { SiblingVisit } from "../scheduling/factsLoader";
+import { SiblingVisit, unitsLeft } from "../scheduling/factsLoader";
 import { failedMessages } from "../scheduling/ruleChecker";
 import { RuleResult } from "../scheduling/types";
 
@@ -51,6 +51,37 @@ function toStoredChange(checked: CheckedChange, reasons: string[]) {
   };
 }
 
+type UnitsShape = {
+  kind: string;
+  decision?: string;
+  before: { authorizationCode: string; units: number; status: string; start: Date } | null;
+  after: { authorizationCode: string; units: number; status: string; start: Date } | null;
+  unitsLeftBefore: number | null;
+  unitsLeftAfter: number | null;
+};
+
+/**
+ * "Units left: 40 -> 32" on each card, counted in time order through the plan, so a
+ * 75-visit schedule reads 400 -> 394 -> 388 ... instead of every card showing the end result.
+ */
+export async function setRunningUnits<T extends UnitsShape>(sandboxId: string, changes: T[]): Promise<T[]> {
+  const active = (shape: UnitsShape["after"]) => (shape && shape.status !== "cancelled" ? shape.units : 0);
+  const authOf = (c: UnitsShape) => (c.after ?? c.before)!.authorizationCode;
+  const running = new Map<string, number | null>();
+  for (const code of new Set(changes.map(authOf))) running.set(code, await unitsLeft(sandboxId, code));
+  const order = changes
+    .map((change, index) => ({ change, index }))
+    .sort((a, b) => (a.change.after ?? a.change.before)!.start.getTime() - (b.change.after ?? b.change.before)!.start.getTime());
+  for (const { change } of order) {
+    if (change.decision === "rejected") continue;
+    const left = running.get(authOf(change)) ?? null;
+    change.unitsLeftBefore = left;
+    change.unitsLeftAfter = left === null ? null : left + active(change.before) - active(change.after);
+    running.set(authOf(change), change.unitsLeftAfter);
+  }
+  return changes;
+}
+
 export async function submitProposal(
   sandboxId: string,
   requestId: string | null,
@@ -63,11 +94,12 @@ export async function submitProposal(
   const failures = checked.flatMap((c, index) => (c.ok ? [] : [{ index, messages: failedMessages(c.ruleResults), results: c.ruleResults }]));
   if (failures.length > 0) return { ok: false, failures };
 
+  const stored = checked.map((c, index) => toStoredChange(c, (changes[index].reasons ?? []).map((r) => r.slice(0, 300)).slice(0, 5)));
   const proposal = await Proposal.create({
     sandboxId,
     requestId: requestId ? new Types.ObjectId(requestId) : null,
     summary: summary.trim().slice(0, 500) || "Schedule changes",
-    changes: checked.map((c, index) => toStoredChange(c, (changes[index].reasons ?? []).map((r) => r.slice(0, 300)).slice(0, 5))),
+    changes: await setRunningUnits(sandboxId, stored as any),
   });
   return { ok: true, proposal: proposal.toObject() as ProposalDoc };
 }
@@ -103,10 +135,14 @@ export async function decideChange(sandboxId: string, proposalId: string, change
   return updated;
 }
 
-export async function approveAll(sandboxId: string, proposalId: string) {
+/** Approves every open change, or only the ones listed (e.g. "approve this week"). */
+export async function approveAll(sandboxId: string, proposalId: string, changeIds?: string[]) {
   const proposal = await getProposal(sandboxId, proposalId);
   assertDraft(proposal);
-  const changes = proposal.changes.map((c) => (c.decision === "pending" ? { ...c, decision: "approved" as const } : c));
+  const only = changeIds ? new Set(changeIds) : null;
+  const changes = proposal.changes.map((c) =>
+    c.decision === "pending" && (!only || only.has(String(c._id))) ? { ...c, decision: "approved" as const } : c
+  );
   const updated = await Proposal.findOneAndUpdate({ _id: proposalId, sandboxId, status: "draft" }, { $set: { changes } }, { new: true }).lean<ProposalDoc>();
   if (!updated) throw new ConflictError("This plan changed while you were deciding. Please look again.");
   return updated;
@@ -177,7 +213,9 @@ export async function editChange(sandboxId: string, proposalId: string, changeId
     { new: true }
   ).lean<ProposalDoc>();
   if (!updated) throw new ConflictError("This plan changed while you were editing. Please look again.");
-  return updated;
+  const recounted = await setRunningUnits(sandboxId, updated.changes as any);
+  await Proposal.updateOne({ _id: proposalId, sandboxId, status: "draft" }, { $set: { changes: recounted } });
+  return { ...updated, changes: recounted };
 }
 
 /** Caregivers who could take this change's visit instead, given the rest of the plan. */

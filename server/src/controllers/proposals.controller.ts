@@ -7,6 +7,8 @@ import { wake } from "../services/integrations/agentGuard.client";
 import { startRecording } from "../services/integrations/agentReplay";
 import { approveAll, candidatesForChange, decideChange, editChange, getProposal } from "../services/proposals/proposal.service";
 
+export const approveAllSchema = z.object({ changeIds: z.array(z.string().regex(/^[a-f0-9]{24}$/)).max(200).optional() });
+
 export const decisionSchema = z.object({ decision: z.enum(["approve", "reject"]) });
 
 export const editChangeSchema = z
@@ -29,7 +31,8 @@ export async function decide(req: Request, res: Response) {
 }
 
 export async function approveAllChanges(req: Request, res: Response) {
-  return successResponseWithData(res, "All open changes approved.", await approveAll(getSandboxId(res), req.params.id));
+  const { changeIds } = res.locals.body as z.infer<typeof approveAllSchema>;
+  return successResponseWithData(res, "Open changes approved.", await approveAll(getSandboxId(res), req.params.id, changeIds));
 }
 
 export async function edit(req: Request, res: Response) {

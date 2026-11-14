@@ -9,7 +9,7 @@ export default {
         sheet: "#FFFFFF",
         ink: { DEFAULT: "#1B2433", soft: "#4A5568", faint: "#7A8597" },
         line: "#DDE2E9",
-        brand: { DEFAULT: "#0F4C5C", dark: "#0A3742", tint: "#E3EEF0" },
+        brand: { DEFAULT: "#26457A", dark: "#1B335C", tint: "#E6ECF6" },
         done: { DEFAULT: "#1F7A4D", tint: "#E4F2EA" },
         waiting: { DEFAULT: "#B26A00", tint: "#FDF1DC" },
         refused: { DEFAULT: "#B42318", tint: "#FBE6E4" },

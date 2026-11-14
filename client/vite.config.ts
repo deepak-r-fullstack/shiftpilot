@@ -15,6 +15,6 @@ export default defineConfig({
   server: {
     port: 5174,
     // The browser calls /api on the same origin; Vite forwards it to the API server.
-    proxy: { "/api": "http://localhost:5060" },
+    proxy: { "/api": "http://localhost:5070" },
   },
 });
