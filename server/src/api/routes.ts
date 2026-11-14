@@ -9,6 +9,8 @@ import * as sessionController from "../controllers/session.controller";
 import * as scheduleController from "../controllers/schedule.controller";
 import * as proposalsController from "../controllers/proposals.controller";
 import * as requestsController from "../controllers/requests.controller";
+import * as internalController from "../controllers/internal.controller";
+import { requireInternalSecret } from "../middlewares/internalSecret.middleware";
 
 // Every endpoint and who may call it, in one place.
 const router = Router();
@@ -68,5 +70,13 @@ router.put(
   asyncHandler(proposalsController.edit)
 );
 router.get("/proposals/:id/changes/:changeId/candidates", apiLimiter, authenticateSession, asyncHandler(proposalsController.getCandidates));
+router.post("/proposals/:id/apply", apiLimiter, authenticateSession, asyncHandler(proposalsController.apply));
+router.get("/proposals/:id/guard-status", apiLimiter, authenticateSession, asyncHandler(proposalsController.getGuardStatus));
+router.post("/integrations/wake", apiLimiter, asyncHandler(proposalsController.wakeAgentGuard));
+
+// ---- internal: AgentGuard runs and undoes approved plans (shared secret) ----
+router.get("/internal/plans/:proposalId/facts", apiLimiter, requireInternalSecret, asyncHandler(internalController.getPlanFacts));
+router.post("/internal/plans/:proposalId/run", apiLimiter, requireInternalSecret, asyncHandler(internalController.runPlanNow));
+router.post("/internal/plans/:proposalId/undo", apiLimiter, requireInternalSecret, asyncHandler(internalController.undoPlanNow));
 
 export default router;

@@ -43,9 +43,6 @@ const proposalSchema = new Schema(
       default: "draft",
     },
     changes: { type: [proposedChangeSchema], default: [] },
-    // Set when this proposal holds only the low-risk changes split off another one.
-    lowRiskBatch: { type: Boolean, default: false },
-    parentProposalId: { type: Schema.Types.ObjectId, default: null },
     applyAttempt: { type: Number, default: 0 },
     guardActionId: { type: String, default: null },
     guardStatus: { type: String, default: null },

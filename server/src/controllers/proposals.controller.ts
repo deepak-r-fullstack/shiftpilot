@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { successResponseWithData } from "../helpers/response";
-import { getSandboxId } from "../middlewares/sandbox.middleware";
+import { getSandboxId, getSession } from "../middlewares/sandbox.middleware";
+import { applyProposal, describeGuard, refreshGuardStatus } from "../services/proposals/apply.service";
+import { wake } from "../services/integrations/agentGuard.client";
 import { approveAll, candidatesForChange, decideChange, editChange, getProposal } from "../services/proposals/proposal.service";
 
 export const decisionSchema = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -37,4 +39,20 @@ export async function edit(req: Request, res: Response) {
 
 export async function getCandidates(req: Request, res: Response) {
   return successResponseWithData(res, "Who could take this visit.", await candidatesForChange(getSandboxId(res), req.params.id, req.params.changeId));
+}
+
+export async function apply(req: Request, res: Response) {
+  const { coordinator } = getSession(res);
+  const proposal = await applyProposal(getSandboxId(res), req.params.id, coordinator.email);
+  return successResponseWithData(res, "Plan sent.", { proposal, guard: describeGuard(proposal) });
+}
+
+export async function getGuardStatus(req: Request, res: Response) {
+  const proposal = await refreshGuardStatus(getSandboxId(res), req.params.id);
+  return successResponseWithData(res, "Plan status.", { proposal, guard: describeGuard(proposal) });
+}
+
+export async function wakeAgentGuard(_req: Request, res: Response) {
+  void wake();
+  return successResponseWithData(res, "Waking the safety layer.", { ok: true });
 }
