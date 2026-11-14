@@ -79,3 +79,20 @@ export function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): bo
 export function describeTime(d: Date): string {
   return inZone(d).toFormat("ccc d LLL, H:mm");
 }
+
+/** Start (Monday 00:00) and end (next Monday 00:00) of the Denver week holding this instant. */
+export function weekRange(d: Date): { from: Date; to: Date } {
+  const start = inZone(d).startOf("week");
+  return { from: start.toJSDate(), to: start.plus({ weeks: 1 }).toJSDate() };
+}
+
+/** Start and end of the Denver day holding this instant. */
+export function dayRange(d: Date): { from: Date; to: Date } {
+  const start = inZone(d).startOf("day");
+  return { from: start.toJSDate(), to: start.plus({ days: 1 }).toJSDate() };
+}
+
+export function dayRangeOfDate(date: string): { from: Date; to: Date } {
+  const start = DateTime.fromISO(date, { zone: ZONE }).startOf("day");
+  return { from: start.toJSDate(), to: start.plus({ days: 1 }).toJSDate() };
+}
