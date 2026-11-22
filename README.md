@@ -6,7 +6,7 @@ A coordinator types a change in plain English: *"Priya is sick tomorrow, cover h
 
 > MERN + TypeScript. The AI plans; plain code checks every rule. Approved plans are applied through [AgentGuard](https://github.com/deepak-r-fullstack/agentguard) (rules, audit trail, Undo) and every run is recorded in [AgentReplay](https://github.com/deepak-r-fullstack/agent_replay).
 
-**Live demo:** [shiftpilot.sritaraksolutions.in](https://shiftpilot.sritaraksolutions.in) (free hosting: the first visit can take about a minute to wake up). Every visitor gets a private copy of a made-up agency.
+**Live demo:** [shiftpilot-lbsp.onrender.com](https://shiftpilot-lbsp.onrender.com) (free hosting: the first visit can take about a minute to wake up). Every visitor gets a private copy of a made-up agency.
 
 ![Schedule with the assistant: a week grid of caregivers and visits, and four story buttons](docs/screenshots/schedule.png)
 
@@ -126,7 +126,7 @@ Both are optional: without their settings ShiftPilot applies plans directly and 
 The agent's read-and-propose tools are also an MCP server, so Claude Desktop, Claude Code or any MCP client can plan changes in your demo agency. Copy your session token from the browser's storage (`shiftpilot-session`), then:
 
 ```bash
-claude mcp add --transport http shiftpilot https://shiftpilot.sritaraksolutions.in/api/mcp \
+claude mcp add --transport http shiftpilot https://shiftpilot-lbsp.onrender.com/api/mcp \
   --header "Authorization: Bearer <your session token>"
 ```
 
